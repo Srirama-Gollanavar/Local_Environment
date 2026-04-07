@@ -112,5 +112,10 @@ def step(action: str) -> Dict[str, Any]:
     return ENV.step(action)
 
 
+def server() -> None:
+    """Console entry point required by the OpenEnv validator."""
+    print("Study Productivity OpenEnv server entry point is available.")
+
+
 if __name__ == "__main__":
     print(reset())

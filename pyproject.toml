@@ -7,12 +7,17 @@ name = "study-productivity-openenv"
 version = "1.0.0"
 description = "OpenEnv reference environment for study productivity task management."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
   { name = "OpenEnv Team" }
 ]
-dependencies = []
+dependencies = [
+  "openenv-core>=0.2.0",
+]
+
+[project.scripts]
+server = "inference:server"
 
 [tool.setuptools]
 py-modules = ["inference"]
