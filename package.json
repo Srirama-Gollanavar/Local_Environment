@@ -1,0 +1,21 @@
+{
+  "name": "study-productivity-openenv",
+  "version": "1.0.0",
+  "description": "A real-world OpenEnv simulation environment for studying student productivity and task management.",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "node main.js"
+  },
+  "keywords": [
+    "rl",
+    "environment",
+    "simulation",
+    "openenv",
+    "productivity",
+    "agent",
+    "markov-decision-process"
+  ],
+  "author": "",
+  "license": "MIT"
+}

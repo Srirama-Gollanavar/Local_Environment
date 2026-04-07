@@ -1,0 +1,111 @@
+name: "Study Productivity OpenEnv"
+version: "1.0.0"
+description: |
+  A real-world simulation environment for studying student productivity and task management.
+  The agent must balance studying, resting, and task management over 30 days to maximize
+  productivity while maintaining energy levels.
+
+metadata:
+  author: "OpenEnv Team"
+  category: "Simulation"
+  domain: "Education / Productivity"
+  difficulty: "Medium"
+
+environment:
+  type: "Discrete"
+  max_episode_length: 30
+  
+observations:
+  - name: "day"
+    type: "integer"
+    range: [1, 30]
+    description: "Current day number"
+  
+  - name: "energy"
+    type: "float"
+    range: [0, 100]
+    description: "Student's energy level (0-100)"
+  
+  - name: "tasks_completed"
+    type: "integer"
+    range: [0, 30]
+    description: "Total tasks completed so far"
+  
+  - name: "productivity"
+    type: "float"
+    range: [0, 1]
+    description: "Current productivity level (0-1)"
+  
+  - name: "total_productivity"
+    type: "float"
+    range: [0, 3]
+    description: "Cumulative productivity score"
+
+actions:
+  - name: "study"
+    description: "Study and complete a task (requires ≥20 energy)"
+    cost: "20 energy"
+    benefit: "+1 task, +0.1 productivity"
+    reward: "+10"
+  
+  - name: "rest"
+    description: "Rest and restore energy"
+    effect: "+30 energy (capped at 100)"
+    reward: "+2"
+  
+  - name: "skip"
+    description: "Skip the day (no action)"
+    effect: "No change"
+    reward: "-3"
+
+rewards:
+  study: 10
+  rest: 2
+  skip: -3
+  burnout: -5
+
+rules:
+  - name: "Study Requirements"
+    description: "Must have ≥20 energy to study; burnout penalty if insufficient energy"
+  
+  - name: "Energy Recovery"
+    description: "Resting restores 30 energy, capped at 100"
+  
+  - name: "Energy Decay"
+    description: "Energy naturally decays by 2 per day if not resting"
+  
+  - name: "Productivity Gain"
+    description: "Successfully studying increases productivity by 0.1"
+  
+  - name: "Episode Termination"
+    description: "Episode ends after 30 days"
+
+tasks:
+  - name: "easy"
+    description: "Complete at least 3 tasks"
+    criteria: "tasks_completed >= 3"
+    max_score: 1.0
+    difficulty: "Easy"
+  
+  - name: "medium"
+    description: "Maintain average productivity"
+    criteria: "avg_productivity > 0.03 per day"
+    max_score: 1.0
+    difficulty: "Medium"
+  
+  - name: "hard"
+    description: "Maximize efficiency (tasks + productivity + energy)"
+    criteria: "balanced_performance"
+    max_score: 1.0
+    difficulty: "Hard"
+    weights:
+      task_completion: 0.6
+      productivity: 0.3
+      energy_balance: 0.1
+
+performance_metrics:
+  - "total_reward"
+  - "tasks_completed"
+  - "total_productivity"
+  - "final_energy"
+  - "composite_score"
