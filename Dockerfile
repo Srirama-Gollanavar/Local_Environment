@@ -15,12 +15,17 @@ COPY env.js ./
 COPY agent.js ./
 COPY grader.js ./
 COPY main.js ./
+COPY simulation.js ./
+COPY app.js ./
 COPY openenv.yaml ./
 COPY README.md ./
 
 # Set environment variable for reproducibility
 ENV NODE_ENV=production
 ENV RANDOM_SEED=42
+ENV PORT=7860
 
-# Default command to run simulation
-CMD ["node", "main.js"]
+EXPOSE 7860
+
+# Default command for Hugging Face Space
+CMD ["node", "app.js"]
