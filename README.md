@@ -1,6 +1,6 @@
 ---
 title: Open Environment WorkSpace
-emoji: rocket
+emoji: 🚀
 colorFrom: blue
 colorTo: green
 sdk: docker
