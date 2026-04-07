@@ -7,3 +7,7 @@ def main() -> None:
     """Start the validation server entry point."""
     print("OpenEnv server entry point ready.")
     print(reset())
+
+
+if __name__ == "__main__":
+    main()
