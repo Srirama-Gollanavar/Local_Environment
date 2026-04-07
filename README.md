@@ -4,8 +4,11 @@ emoji: 😻
 colorFrom: blue
 colorTo: green
 sdk: docker
+app_file: app.py
 pinned: false
 license: mit
 ---
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+# Open Environment WorkSpace
+
+This is my Hugging Face Docker Space 🚀
