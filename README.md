@@ -1,3 +1,13 @@
+---
+title: Open Environment WorkSpace
+emoji: rocket
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+license: mit
+---
+
 # Study Productivity OpenEnv
 
 A real-world OpenEnv simulation environment that models a student managing daily study tasks, energy levels, and productivity over a 30-day period.
