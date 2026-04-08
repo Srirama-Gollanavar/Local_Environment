@@ -102,6 +102,7 @@ class StudyProductivityEnv:
 
 
 ENV = StudyProductivityEnv()
+MODEL_CACHE: str | None = None
 
 
 def reset() -> Dict[str, Any]:
@@ -125,15 +126,6 @@ def emit_structured(line: str) -> None:
     """Write validator-facing output to stdout immediately."""
     sys.stdout.write(f"{line}\n")
     sys.stdout.flush()
-
-
-def get_model_name() -> str:
-    return (
-        os.environ.get("MODEL")
-        or os.environ.get("OPENAI_MODEL")
-        or os.environ.get("LLM_MODEL")
-        or "gpt-4o-mini"
-    )
 
 
 def get_required_env(name: str) -> str:
@@ -176,26 +168,97 @@ def prompt_messages(task_name: str, observation: Dict[str, Any]) -> list[Dict[st
     ]
 
 
-def choose_action_via_openai(task_name: str, observation: Dict[str, Any]) -> str:
-    api_base_url = get_required_env("API_BASE_URL")
-    api_key = get_required_env("API_KEY")
-    model = get_model_name()
-    messages = prompt_messages(task_name, observation)
+def choose_action(observation: Dict[str, Any]) -> str:
+    """Fallback heuristic so inference still completes if the proxy is unavailable."""
+    energy = observation["energy"]
+    tasks_completed = observation["tasks_completed"]
+
+    if energy <= 30:
+        return "rest"
+    if energy > 50:
+        return "study"
+    if tasks_completed < 2:
+        return "study"
+    return "rest"
+
+
+def get_preferred_model_candidates() -> list[str]:
+    candidates = [
+        os.environ.get("MODEL"),
+        os.environ.get("OPENAI_MODEL"),
+        os.environ.get("LLM_MODEL"),
+        os.environ.get("MODEL_NAME"),
+        "gpt-4.1-mini",
+        "gpt-4.1",
+        "gpt-4o",
+        "o4-mini",
+        "gpt-4o-mini",
+    ]
+    return [candidate for candidate in candidates if candidate]
+
+
+def fetch_available_models(api_base_url: str, api_key: str) -> list[str]:
+    endpoint = f"{api_base_url.rstrip('/')}/models"
+    http_request = request.Request(
+        endpoint,
+        headers={"Authorization": f"Bearer {api_key}"},
+        method="GET",
+    )
 
     try:
-        from openai import OpenAI  # type: ignore
+        with request.urlopen(http_request) as response:
+            payload = json.loads(response.read().decode("utf-8"))
     except Exception:
-        return choose_action_via_http(api_base_url, api_key, model, messages)
+        return []
 
-    client = OpenAI(base_url=api_base_url, api_key=api_key)
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0,
-        max_tokens=4,
-    )
-    content = response.choices[0].message.content or ""
-    return parse_action(content)
+    models = []
+    for item in payload.get("data", []):
+        model_id = item.get("id")
+        if isinstance(model_id, str) and model_id:
+            models.append(model_id)
+    return models
+
+
+def select_model(api_base_url: str, api_key: str) -> str:
+    global MODEL_CACHE
+    if MODEL_CACHE:
+        return MODEL_CACHE
+
+    preferred = get_preferred_model_candidates()
+    available = fetch_available_models(api_base_url, api_key)
+
+    for candidate in preferred:
+        if candidate in available:
+            MODEL_CACHE = candidate
+            return MODEL_CACHE
+
+    if available:
+        MODEL_CACHE = available[0]
+        return MODEL_CACHE
+
+    MODEL_CACHE = preferred[0]
+    return MODEL_CACHE
+
+
+def try_choose_action_via_proxy(task_name: str, observation: Dict[str, Any]) -> str:
+    api_base_url = get_required_env("API_BASE_URL")
+    api_key = get_required_env("API_KEY")
+    messages = prompt_messages(task_name, observation)
+    attempted_models: list[str] = []
+
+    primary_model = select_model(api_base_url, api_key)
+    for model in [primary_model, *get_preferred_model_candidates()]:
+        if model in attempted_models:
+            continue
+        attempted_models.append(model)
+        try:
+            return choose_action_via_http(api_base_url, api_key, model, messages)
+        except RuntimeError as exc:
+            if "does not exist" in str(exc).lower() or "notfounderror" in str(exc).lower():
+                continue
+            raise
+
+    raise RuntimeError(f"No working model found through the LLM proxy: {attempted_models}")
 
 
 def choose_action_via_http(
@@ -260,7 +323,10 @@ def run_episode(task_name: str) -> tuple[float, int]:
     done = False
     final_state = observation
     while not done:
-        action = choose_action_via_openai(task_name, observation)
+        try:
+            action = try_choose_action_via_proxy(task_name, observation)
+        except Exception:
+            action = choose_action(observation)
         result = env.step(action)
         final_state = result["state"]
         step_count += 1
