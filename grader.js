@@ -2,6 +2,11 @@
 class TaskGrader {
   constructor() {
     this.MAX_DAYS = 30;
+    this.EPSILON = 0.001;
+  }
+
+  normalizeScore(score) {
+    return Math.max(this.EPSILON, Math.min(score, 1 - this.EPSILON));
   }
 
   /**
@@ -13,7 +18,7 @@ class TaskGrader {
     const tasksCompleted = finalState.tasks_completed;
     
     // Score: 0.0 if less than 3, up to 1.0 for many tasks
-    const score = Math.min(tasksCompleted / tasksRequired, 1.0);
+    const score = this.normalizeScore(tasksCompleted / tasksRequired);
     
     return {
       task: 'EASY',
@@ -39,7 +44,7 @@ class TaskGrader {
     // score normalized to [0, 1]
     // Assuming max productivity per day is 0.1, so max total is 3.0
     const maxPossibleAverage = 0.1; // per day
-    const score = Math.min(averageProductivity / maxPossibleAverage, 1.0);
+    const score = this.normalizeScore(averageProductivity / maxPossibleAverage);
     
     return {
       task: 'MEDIUM',
@@ -79,7 +84,7 @@ class TaskGrader {
       energyScore * 0.1
     );
     
-    const score = Math.min(efficiencyScore, 1.0);
+    const score = this.normalizeScore(efficiencyScore);
     
     return {
       task: 'HARD',

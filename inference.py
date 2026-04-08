@@ -297,20 +297,28 @@ def choose_action_via_http(
     return parse_action(content)
 
 
+def normalize_score(score: float) -> float:
+    """Keep validator-facing scores strictly inside the open interval (0, 1)."""
+    epsilon = 0.001
+    return max(epsilon, min(score, 1.0 - epsilon))
+
+
 def grade_easy(final_state: Dict[str, Any]) -> float:
-    return min(final_state["tasks_completed"] / 3.0, 1.0)
+    return normalize_score(final_state["tasks_completed"] / 3.0)
 
 
 def grade_medium(final_state: Dict[str, Any]) -> float:
     average_productivity = final_state["total_productivity"] / 30.0
-    return min(average_productivity / 0.1, 1.0)
+    return normalize_score(average_productivity / 0.1)
 
 
 def grade_hard(final_state: Dict[str, Any]) -> float:
     task_score = min(final_state["tasks_completed"] / 5.0, 1.0)
     productivity_score = min(final_state["total_productivity"] / 3.0, 1.0)
     energy_score = final_state["energy"] / 100.0
-    return min((task_score * 0.6) + (productivity_score * 0.3) + (energy_score * 0.1), 1.0)
+    return normalize_score(
+        (task_score * 0.6) + (productivity_score * 0.3) + (energy_score * 0.1)
+    )
 
 
 def run_episode(task_name: str) -> tuple[float, int]:
