@@ -7,8 +7,11 @@ This module mirrors the JavaScript environment so automated checks can import
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 import sys
 from typing import Dict, Any
+from urllib import error, request
 
 
 @dataclass
@@ -115,21 +118,120 @@ def step(action: str) -> Dict[str, Any]:
 
 def server() -> None:
     """Console entry point required by the OpenEnv validator."""
-    print("Study Productivity OpenEnv server entry point is available.")
+    main()
 
 
-def choose_action(observation: Dict[str, Any]) -> str:
-    """Match the baseline JavaScript agent policy for deterministic runs."""
-    energy = observation["energy"]
-    tasks_completed = observation["tasks_completed"]
+def emit_structured(line: str) -> None:
+    """Write validator-facing output to stdout immediately."""
+    sys.stdout.write(f"{line}\n")
+    sys.stdout.flush()
 
-    if energy <= 30:
-        return "rest"
-    if energy > 50:
-        return "study"
-    if tasks_completed < 2:
-        return "study"
-    return "rest"
+
+def get_model_name() -> str:
+    return (
+        os.environ.get("MODEL")
+        or os.environ.get("OPENAI_MODEL")
+        or os.environ.get("LLM_MODEL")
+        or "gpt-4o-mini"
+    )
+
+
+def get_required_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+def parse_action(raw_text: str) -> str:
+    normalized = raw_text.strip().lower()
+    for action in ("study", "rest", "skip"):
+        if action in normalized:
+            return action
+    raise RuntimeError(f"Model returned invalid action: {raw_text!r}")
+
+
+def prompt_messages(task_name: str, observation: Dict[str, Any]) -> list[Dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are controlling a study productivity simulation. "
+                "Choose exactly one action from: study, rest, skip. "
+                "Return only the single action word."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Task: {task_name}\n"
+                f"Day: {observation['day']}\n"
+                f"Energy: {observation['energy']}\n"
+                f"Tasks completed: {observation['tasks_completed']}\n"
+                f"Current productivity: {observation['productivity']}\n"
+                f"Total productivity: {observation['total_productivity']}\n"
+                "Pick the best next action and answer with only one word."
+            ),
+        },
+    ]
+
+
+def choose_action_via_openai(task_name: str, observation: Dict[str, Any]) -> str:
+    api_base_url = get_required_env("API_BASE_URL")
+    api_key = get_required_env("API_KEY")
+    model = get_model_name()
+    messages = prompt_messages(task_name, observation)
+
+    try:
+        from openai import OpenAI  # type: ignore
+    except Exception:
+        return choose_action_via_http(api_base_url, api_key, model, messages)
+
+    client = OpenAI(base_url=api_base_url, api_key=api_key)
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0,
+        max_tokens=4,
+    )
+    content = response.choices[0].message.content or ""
+    return parse_action(content)
+
+
+def choose_action_via_http(
+    api_base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[Dict[str, str]],
+) -> str:
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": 4,
+        }
+    ).encode("utf-8")
+    endpoint = f"{api_base_url.rstrip('/')}/chat/completions"
+    http_request = request.Request(
+        endpoint,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(http_request) as response:
+            response_data = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"LLM proxy request failed: {exc.code} {detail}") from exc
+
+    content = response_data["choices"][0]["message"]["content"]
+    return parse_action(content)
 
 
 def grade_easy(final_state: Dict[str, Any]) -> float:
@@ -153,26 +255,16 @@ def run_episode(task_name: str) -> tuple[float, int]:
     observation = env.reset()
     step_count = 0
 
-    print(f"[START] task={task_name}", flush=True)
+    emit_structured(f"[START] task={task_name}")
 
     done = False
     final_state = observation
     while not done:
-        action = choose_action(observation)
+        action = choose_action_via_openai(task_name, observation)
         result = env.step(action)
         final_state = result["state"]
         step_count += 1
-        print(
-            "[STEP] "
-            f"step={step_count} "
-            f"action={action} "
-            f"reward={result['reward']} "
-            f"day={final_state['day']} "
-            f"energy={final_state['energy']:.1f} "
-            f"tasks={final_state['tasks_completed']} "
-            f"productivity={final_state['total_productivity']:.3f}",
-            flush=True,
-        )
+        emit_structured(f"[STEP] step={step_count} reward={result['reward']}")
         observation = final_state
         done = result["done"]
 
@@ -182,7 +274,7 @@ def run_episode(task_name: str) -> tuple[float, int]:
         "hard": grade_hard(final_state),
     }
     score = score_by_task[task_name]
-    print(f"[END] task={task_name} score={score:.3f} steps={step_count}", flush=True)
+    emit_structured(f"[END] task={task_name} score={score:.3f} steps={step_count}")
     return score, step_count
 
 
