@@ -7,7 +7,6 @@ This module mirrors the JavaScript environment so automated checks can import
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import sys
 from typing import Dict, Any
 
@@ -119,10 +118,79 @@ def server() -> None:
     print("Study Productivity OpenEnv server entry point is available.")
 
 
+def choose_action(observation: Dict[str, Any]) -> str:
+    """Match the baseline JavaScript agent policy for deterministic runs."""
+    energy = observation["energy"]
+    tasks_completed = observation["tasks_completed"]
+
+    if energy <= 30:
+        return "rest"
+    if energy > 50:
+        return "study"
+    if tasks_completed < 2:
+        return "study"
+    return "rest"
+
+
+def grade_easy(final_state: Dict[str, Any]) -> float:
+    return min(final_state["tasks_completed"] / 3.0, 1.0)
+
+
+def grade_medium(final_state: Dict[str, Any]) -> float:
+    average_productivity = final_state["total_productivity"] / 30.0
+    return min(average_productivity / 0.1, 1.0)
+
+
+def grade_hard(final_state: Dict[str, Any]) -> float:
+    task_score = min(final_state["tasks_completed"] / 5.0, 1.0)
+    productivity_score = min(final_state["total_productivity"] / 3.0, 1.0)
+    energy_score = final_state["energy"] / 100.0
+    return min((task_score * 0.6) + (productivity_score * 0.3) + (energy_score * 0.1), 1.0)
+
+
+def run_episode(task_name: str) -> tuple[float, int]:
+    env = StudyProductivityEnv()
+    observation = env.reset()
+    step_count = 0
+
+    print(f"[START] task={task_name}", flush=True)
+
+    done = False
+    final_state = observation
+    while not done:
+        action = choose_action(observation)
+        result = env.step(action)
+        final_state = result["state"]
+        step_count += 1
+        print(
+            "[STEP] "
+            f"step={step_count} "
+            f"action={action} "
+            f"reward={result['reward']} "
+            f"day={final_state['day']} "
+            f"energy={final_state['energy']:.1f} "
+            f"tasks={final_state['tasks_completed']} "
+            f"productivity={final_state['total_productivity']:.3f}",
+            flush=True,
+        )
+        observation = final_state
+        done = result["done"]
+
+    score_by_task = {
+        "easy": grade_easy(final_state),
+        "medium": grade_medium(final_state),
+        "hard": grade_hard(final_state),
+    }
+    score = score_by_task[task_name]
+    print(f"[END] task={task_name} score={score:.3f} steps={step_count}", flush=True)
+    return score, step_count
+
+
 def main() -> int:
-    """Run a minimal smoke test when executed as a script."""
+    """Run deterministic task episodes and emit structured validator output."""
     try:
-        print(json.dumps(reset(), sort_keys=True))
+        for task_name in ("easy", "medium", "hard"):
+            run_episode(task_name)
         return 0
     except Exception as exc:
         print(f"inference.py failed: {exc}", file=sys.stderr)
