@@ -9,7 +9,7 @@ async function runSimulation() {
   console.log('='.repeat(70));
 
   // Initialize components
-  const env = new StudyProductivityEnv(seed = 42);
+  const env = new StudyProductivityEnv(42);
   const agent = new StudyAgent('BaselineAgent');
   const grader = new TaskGrader();
 

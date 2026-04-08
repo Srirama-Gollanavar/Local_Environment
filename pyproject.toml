@@ -18,9 +18,13 @@ dependencies = [
 
 [project.scripts]
 server = "server.app:main"
+openenv-server = "server.app:main"
 
 [tool.setuptools]
 py-modules = ["inference"]
 
 [tool.setuptools.packages.find]
 include = ["server*"]
+
+[tool.uv]
+package = true

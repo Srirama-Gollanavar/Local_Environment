@@ -7,6 +7,8 @@ This module mirrors the JavaScript environment so automated checks can import
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import sys
 from typing import Dict, Any
 
 
@@ -117,5 +119,15 @@ def server() -> None:
     print("Study Productivity OpenEnv server entry point is available.")
 
 
+def main() -> int:
+    """Run a minimal smoke test when executed as a script."""
+    try:
+        print(json.dumps(reset(), sort_keys=True))
+        return 0
+    except Exception as exc:
+        print(f"inference.py failed: {exc}", file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    print(reset())
+    raise SystemExit(main())
